@@ -136,6 +136,38 @@ When password is found:
 | 💻 Console | View logs |
 
 ---
+SUCCES RATE 
+High Success (90-95%)
+Linux with aircrack-ng
+
+Alfa AWUS036ACH adapter
+
+Monitor mode enabled
+
+Correct BSSID entered
+
+Low Success (20-40%)
+Windows with Npcap
+
+Scapy installed
+
+Some adapters support injection
+
+Limited packet injection
+
+Very Low (5-10%)
+Windows without special drivers
+
+Basic WiFi adapter
+
+No packet injection support
+
+Zero (0%)
+No monitor mode
+
+Wrong BSSID
+
+No compatible hardware
 
 ## Warning
 
