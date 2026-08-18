@@ -135,12 +135,21 @@ When password is found:
 | 🔔 Webhook | Discord alerts |
 | 💻 Console | View logs |
 
-----------
-Hardware	Success Rate
-Linux + Monitor Mode Adapter|	90-95%
-Windows + Npcap + Scapy	|20-40%
-Windows without proper tools|	5-10%
-No monitor mode support|	0%
+Success Rates
+Brute Force Attack
+Password Type	Success Rate	Time Required
+Weak (12345678)	95%	Seconds
+Common (ahmed123)	80%	Minutes
+Name + Year (ahmed1990)	70%	Minutes
+Phone Number	65%	Minutes
+Random 8-char	15%	Hours
+Strong 12+ char	5%	Days/Years
+Deauth Attack
+Setup	Success Rate
+Linux + Monitor Mode Adapter	90-95%
+Windows + Npcap + Scapy	20-40%
+Windows basic adapter	5-10%
+No monitor mode support	0%
 
 ## Warning
 
