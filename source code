@@ -1,0 +1,1188 @@
+import subprocess
+import re
+import os
+import sys
+import ctypes
+import time
+import threading
+import tkinter as tk
+from tkinter import ttk, messagebox, scrolledtext, filedialog
+import queue
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import random
+import string
+import json
+import requests
+import datetime
+
+class EgyptianPasswordGenerator:
+    """Generate common Egyptian password patterns"""
+    
+    def __init__(self):
+        self.egyptian_names = [
+            "ahmed", "mohamed", "mahmoud", "mostafa", "youssef", "omar", "ali",
+            "khaled", "hassan", "hussien", "ibrahim", "tarek", "sherif", "amr",
+            "karim", "hany", "waleed", "samy", "adel", "magdy", "ashraf", "ayman",
+            "essam", "hossam", "islam", "maged", "mina", "nabil",
+            "osama", "ramy", "salah", "sameh", "sayed", "wael", "yasser",
+            "hamada", "abdo", "shady", "fady", "bassem", "hazem",
+            "sara", "salma", "nour", "dina", "heba", "rana", "yara", "farah",
+            "malak", "habiba", "menna", "nada", "reem", "shahd", "yasmin",
+            "jana", "layla", "mariam", "nouran", "radwa", "shaimaa"
+        ]
+        
+        self.years = [str(y) for y in range(1970, 2031)]
+        self.symbols = ["@", "#", "$", "!", "*", "_", ".", "-"]
+        
+    def generate_common_passwords(self, count=100):
+        """Generate common Egyptian passwords"""
+        passwords = set()
+        
+        patterns = [
+            "{name}{year}", "{name}@{year}", "{name}{number}", "{name}@{number}",
+            "{name}_{year}", "{name}.{year}", "{name}{symbol}{number}",
+            "{cap}{year}", "{cap}@{year}", "{name}{phone}", "{name}@{phone}",
+            "{name}{year}!", "{name}@{year}!", "{name}123", "{name}@123",
+            "{name}2020", "{name}@2020", "{name}2024", "{name}@2024",
+            "{name}2030", "{name}@2030"
+        ]
+        
+        while len(passwords) < count:
+            name = random.choice(self.egyptian_names)
+            pattern = random.choice(patterns)
+            
+            password = pattern
+            password = password.replace("{name}", name)
+            password = password.replace("{cap}", name.capitalize())
+            password = password.replace("{year}", random.choice(self.years))
+            password = password.replace("{number}", str(random.randint(1, 9999)))
+            password = password.replace("{symbol}", random.choice(self.symbols))
+            
+            if "{phone}" in password:
+                phone = random.choice(["010", "011", "012", "015"]) + ''.join(random.choice(string.digits) for _ in range(8))
+                password = password.replace("{phone}", phone)
+            
+            passwords.add(password)
+        
+        return list(passwords)
+    
+    def generate_phone_passwords(self, count=50):
+        """Generate phone number passwords"""
+        passwords = set()
+        prefixes = ["010", "011", "012", "015"]
+        
+        while len(passwords) < count:
+            phone = random.choice(prefixes) + ''.join(random.choice(string.digits) for _ in range(8))
+            variations = [phone, f"0{phone}", f"{phone}@", f"0{phone}@", f"{phone}!", f"0{phone}!"]
+            passwords.add(random.choice(variations))
+        
+        return list(passwords)
+    
+    def generate_name_passwords(self, count=100):
+        """Generate name-based passwords"""
+        passwords = set()
+        
+        while len(passwords) < count:
+            name = random.choice(self.egyptian_names)
+            year = random.choice(self.years)
+            symbol = random.choice(self.symbols)
+            number = str(random.randint(1, 9999))
+            
+            variations = [
+                name, name.capitalize(), name.upper(),
+                name + year, name + "@" + year, name + symbol + year,
+                name.capitalize() + year, name.capitalize() + "@" + year,
+                name + number, name + "@" + number, name + symbol + number,
+                name + year + "!", name + "@" + year + "!",
+                name + "123", name + "@123", name + "2020", name + "@2020",
+                name + "2024", name + "@2024", name + "2030", name + "@2030"
+            ]
+            
+            passwords.add(random.choice(variations))
+        
+        return list(passwords)
+    
+    def generate_all(self, count=200):
+        """Generate combined passwords"""
+        passwords = set()
+        passwords.update(self.generate_common_passwords(count // 2))
+        passwords.update(self.generate_phone_passwords(count // 4))
+        passwords.update(self.generate_name_passwords(count // 4))
+        return list(passwords)
+
+class WiFiToolGUI:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("🔥 WiFi Hacking Tool v1.0 🔥")
+        self.root.geometry("1200x800")
+        self.root.configure(bg='#0a0a0a')
+        
+        self.style = ttk.Style()
+        self.style.theme_use('clam')
+        self.configure_styles()
+        
+        self.networks = []
+        self.output_queue = queue.Queue()
+        self.running = False
+        self.stop_flag = threading.Event()
+        self.brute_force_active = False
+        self.deauth_active = False
+        self.password_found = False
+        self.tested_passwords = 0
+        self.total_passwords = 0
+        self.start_time = 0
+        self.generated_passwords = []
+        self.webhook_url = ""
+        self.webhook_enabled = False
+        self.egyptian_generator = EgyptianPasswordGenerator()
+        
+        self.create_widgets()
+        self.check_admin()
+        self.process_queue()
+        
+    def configure_styles(self):
+        """Configure red/black theme"""
+        self.style.configure('TNotebook', background='#0a0a0a', borderwidth=0)
+        self.style.configure('TNotebook.Tab', 
+                           background='#1a0000', 
+                           foreground='#ff0000',
+                           padding=[15, 8],
+                           font=('Arial', 10, 'bold'))
+        self.style.map('TNotebook.Tab',
+                      background=[('selected', '#330000')],
+                      foreground=[('selected', '#ff0000')])
+        
+        self.style.configure('Treeview', 
+                           background='#1a1a1a',
+                           foreground='#ff0000',
+                           fieldbackground='#1a1a1a',
+                           font=('Arial', 10))
+        self.style.configure('Treeview.Heading',
+                           background='#330000',
+                           foreground='#ff0000',
+                           font=('Arial', 10, 'bold'))
+        self.style.map('Treeview',
+                      background=[('selected', '#ff0000')],
+                      foreground=[('selected', '#ffffff')])
+        
+        self.style.configure('Red.Horizontal.TProgressbar',
+                           background='#ff0000',
+                           troughcolor='#1a1a1a',
+                           bordercolor='#330000',
+                           lightcolor='#ff0000',
+                           darkcolor='#cc0000')
+        
+    def create_widgets(self):
+        """Create all GUI widgets"""
+        main_frame = tk.Frame(self.root, bg='#0a0a0a')
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        # Header
+        header_frame = tk.Frame(main_frame, bg='#0a0a0a')
+        header_frame.pack(fill=tk.X, pady=10)
+        
+        tk.Label(header_frame, text="🔥 WIFI HACKING TOOL 🔥", 
+                bg='#0a0a0a', fg='#ff0000', 
+                font=('Arial', 28, 'bold')).pack()
+        
+        tk.Label(header_frame, text="v1.0 - SSID Based Brute Force made by -STXR-", 
+                bg='#0a0a0a', fg='#cc0000', 
+                font=('Arial', 12)).pack()
+        
+        tk.Frame(main_frame, bg='#ff0000', height=2).pack(fill=tk.X, pady=5)
+        
+        # Notebook
+        self.notebook = ttk.Notebook(main_frame)
+        self.notebook.pack(fill=tk.BOTH, expand=True, pady=10)
+        
+        # Create tabs
+        self.create_scan_tab()
+        self.create_brute_force_tab()
+        self.create_deauth_tab()
+        self.create_generator_tab()
+        self.create_passwords_tab()
+        self.create_connect_tab()
+        self.create_webhook_tab()
+        self.create_console_tab()
+        
+        # Status bar
+        self.status_bar = tk.Label(self.root, text="⚡ Ready ⚡", 
+                                  bg='#1a0000', fg='#ff0000', 
+                                  anchor='w', padx=15, pady=8,
+                                  font=('Arial', 10, 'bold'))
+        self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+        
+    def create_scan_tab(self):
+        """Scanner tab"""
+        frame = tk.Frame(self.notebook, bg='#0a0a0a')
+        self.notebook.add(frame, text="📡 Scanner")
+        
+        tk.Button(frame, text="🔍 SCAN NETWORKS", 
+                 bg='#1a0000', fg='#ff0000',
+                 font=('Arial', 11, 'bold'),
+                 padx=20, pady=10,
+                 relief='raised', borderwidth=2,
+                 command=self.scan_networks).pack(pady=15)
+        
+        list_frame = tk.LabelFrame(frame, text=" AVAILABLE NETWORKS ", 
+                                  bg='#0a0a0a', fg='#ff0000',
+                                  relief='groove', borderwidth=2)
+        list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        columns = ('SSID', 'BSSID', 'Signal', 'Security')
+        self.networks_tree = ttk.Treeview(list_frame, columns=columns, show='headings', height=12)
+        
+        for col in columns:
+            self.networks_tree.heading(col, text=col)
+            self.networks_tree.column(col, width=200)
+        
+        scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.networks_tree.yview)
+        self.networks_tree.configure(yscrollcommand=scrollbar.set)
+        
+        self.networks_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        self.networks_tree.bind('<<TreeviewSelect>>', self.on_network_select)
+        
+    def create_brute_force_tab(self):
+        """Brute Force tab - uses SSID (name)"""
+        frame = tk.Frame(self.notebook, bg='#0a0a0a')
+        self.notebook.add(frame, text="💣 Brute Force")
+        
+        # Target frame - SSID only
+        target_frame = tk.LabelFrame(frame, text=" TARGET NETWORK ", 
+                                    bg='#0a0a0a', fg='#ff0000',
+                                    relief='groove', borderwidth=2)
+        target_frame.pack(pady=10, padx=20, fill=tk.X)
+        
+        tk.Label(target_frame, text="🌐 WiFi Name (SSID):", 
+                bg='#0a0a0a', fg='#ff0000',
+                font=('Arial', 11, 'bold')).grid(row=0, column=0, padx=5, pady=15, sticky='w')
+        self.brute_ssid_entry = tk.Entry(target_frame, width=40,
+                                        bg='#1a1a1a', fg='#ff0000',
+                                        insertbackground='#ff0000',
+                                        font=('Arial', 11))
+        self.brute_ssid_entry.grid(row=0, column=1, padx=5, pady=15)
+        
+        tk.Label(target_frame, text="(Enter WiFi name)", 
+                bg='#0a0a0a', fg='#666666',
+                font=('Arial', 9)).grid(row=1, column=1, padx=5, pady=5, sticky='w')
+        
+        # Wordlist frame
+        wordlist_frame = tk.LabelFrame(frame, text=" PASSWORD LIST ", 
+                                      bg='#0a0a0a', fg='#ff0000',
+                                      relief='groove', borderwidth=2)
+        wordlist_frame.pack(pady=10, padx=20, fill=tk.X)
+        
+        tk.Label(wordlist_frame, text="📚 Wordlist File:", 
+                bg='#0a0a0a', fg='#ff0000',
+                font=('Arial', 11, 'bold')).grid(row=0, column=0, padx=5, pady=10, sticky='w')
+        self.brute_wordlist_entry = tk.Entry(wordlist_frame, width=40,
+                                            bg='#1a1a1a', fg='#ff0000',
+                                            insertbackground='#ff0000',
+                                            font=('Arial', 10))
+        self.brute_wordlist_entry.grid(row=0, column=1, padx=5, pady=10)
+        
+        tk.Button(wordlist_frame, text="📂 Browse", 
+                 bg='#1a0000', fg='#ff0000',
+                 font=('Arial', 10, 'bold'),
+                 command=self.browse_brute_wordlist).grid(row=0, column=2, padx=5, pady=10)
+        
+        # Quick generate buttons
+        gen_frame = tk.Frame(wordlist_frame, bg='#0a0a0a')
+        gen_frame.grid(row=1, column=0, columnspan=3, pady=10)
+        
+        tk.Button(gen_frame, text="🇪🇬 Egyptian Passwords", 
+                 bg='#1a0000', fg='#ff0000',
+                 font=('Arial', 10, 'bold'),
+                 command=self.auto_generate_for_brute).pack(side=tk.LEFT, padx=5)
+        
+        tk.Button(gen_frame, text="🎲 Random Passwords", 
+                 bg='#1a0000', fg='#ff0000',
+                 font=('Arial', 10, 'bold'),
+                 command=self.generate_random_for_brute).pack(side=tk.LEFT, padx=5)
+        
+        # Auto-generate checkbox
+        self.auto_generate_var = tk.BooleanVar(value=True)
+        tk.Checkbutton(wordlist_frame, text="✅ Auto-generate if no wordlist provided", 
+                      variable=self.auto_generate_var,
+                      bg='#0a0a0a', fg='#00ff00',
+                      selectcolor='#1a1a1a',
+                      font=('Arial', 10, 'bold')).grid(row=2, column=0, columnspan=3, padx=5, pady=10, sticky='w')
+        
+        # Attack buttons
+        button_frame = tk.Frame(frame, bg='#0a0a0a')
+        button_frame.pack(pady=20)
+        
+        self.brute_force_button = tk.Button(button_frame, text="💣 START BRUTE FORCE", 
+                                           bg='#1a0000', fg='#ff0000',
+                                           font=('Arial', 12, 'bold'),
+                                           padx=30, pady=15,
+                                           relief='raised', borderwidth=2,
+                                           command=self.start_brute_force)
+        self.brute_force_button.pack(side=tk.LEFT, padx=10)
+        
+        self.stop_brute_button = tk.Button(button_frame, text="⏹ STOP", 
+                                          bg='#330000', fg='#ff0000',
+                                          font=('Arial', 12, 'bold'),
+                                          padx=30, pady=15,
+                                          relief='raised', borderwidth=3,
+                                          state='disabled',
+                                          command=self.stop_brute_force)
+        self.stop_brute_button.pack(side=tk.LEFT, padx=10)
+        
+        # Progress
+        progress_frame = tk.Frame(frame, bg='#0a0a0a')
+        progress_frame.pack(pady=20, padx=20, fill=tk.X)
+        
+        self.brute_progress_var = tk.DoubleVar()
+        self.brute_progress_bar = ttk.Progressbar(progress_frame, 
+                                                  variable=self.brute_progress_var,
+                                                  style='Red.Horizontal.TProgressbar',
+                                                  maximum=100, length=500)
+        self.brute_progress_bar.pack(side=tk.LEFT, padx=5)
+        
+        self.brute_progress_label = tk.Label(progress_frame, text="0%", 
+                                            bg='#0a0a0a', fg='#ff0000',
+                                            font=('Arial', 10, 'bold'))
+        self.brute_progress_label.pack(side=tk.LEFT, padx=10)
+        
+        # Status
+        self.brute_speed_label = tk.Label(frame, text="Speed: 0 p/s", 
+                                         bg='#0a0a0a', fg='#ff0000',
+                                         font=('Arial', 10, 'bold'))
+        self.brute_speed_label.pack(pady=5)
+        
+        self.brute_status_label = tk.Label(frame, text="⚡ Status: Ready", 
+                                          bg='#0a0a0a', fg='#00ff00',
+                                          font=('Arial', 12, 'bold'))
+        self.brute_status_label.pack(pady=5)
+        
+    def create_deauth_tab(self):
+        """Deauth tab - uses BSSID"""
+        frame = tk.Frame(self.notebook, bg='#0a0a0a')
+        self.notebook.add(frame, text="📡 Deauth")
+        
+        options_frame = tk.LabelFrame(frame, text=" DEAUTH ATTACK (uses BSSID) ", 
+                                     bg='#0a0a0a', fg='#ff0000',
+                                     relief='groove', borderwidth=2)
+        options_frame.pack(pady=10, padx=20, fill=tk.X)
+        
+        tk.Label(options_frame, text="🎯 Target BSSID:", 
+                bg='#0a0a0a', fg='#ff0000',
+                font=('Arial', 11, 'bold')).grid(row=0, column=0, padx=5, pady=10, sticky='w')
+        self.deauth_bssid_entry = tk.Entry(options_frame, width=30,
+                                          bg='#1a1a1a', fg='#ff0000',
+                                          insertbackground='#ff0000',
+                                          font=('Arial', 10))
+        self.deauth_bssid_entry.grid(row=0, column=1, padx=5, pady=10)
+        
+        tk.Label(options_frame, text="(MAC address like AA:BB:CC:DD:EE:FF)", 
+                bg='#0a0a0a', fg='#666666',
+                font=('Arial', 9)).grid(row=1, column=1, padx=5, pady=5, sticky='w')
+        
+        tk.Label(options_frame, text="👤 Client MAC:", 
+                bg='#0a0a0a', fg='#ff0000',
+                font=('Arial', 11, 'bold')).grid(row=2, column=0, padx=5, pady=10, sticky='w')
+        self.deauth_client_entry = tk.Entry(options_frame, width=30,
+                                           bg='#1a1a1a', fg='#ff0000',
+                                           insertbackground='#ff0000',
+                                           font=('Arial', 10))
+        self.deauth_client_entry.grid(row=2, column=1, padx=5, pady=10)
+        
+        tk.Label(options_frame, text="🔢 Count:", 
+                bg='#0a0a0a', fg='#ff0000',
+                font=('Arial', 11, 'bold')).grid(row=3, column=0, padx=5, pady=10, sticky='w')
+        self.deauth_count_entry = tk.Entry(options_frame, width=30,
+                                          bg='#1a1a1a', fg='#ff0000',
+                                          insertbackground='#ff0000',
+                                          font=('Arial', 10))
+        self.deauth_count_entry.insert(0, "100")
+        self.deauth_count_entry.grid(row=3, column=1, padx=5, pady=10)
+        
+        button_frame = tk.Frame(options_frame, bg='#0a0a0a')
+        button_frame.grid(row=4, column=0, columnspan=2, pady=20)
+        
+        self.deauth_button = tk.Button(button_frame, text="📡 START DEAUTH", 
+                                      bg='#1a0000', fg='#ff0000',
+                                      font=('Arial', 12, 'bold'),
+                                      padx=30, pady=15,
+                                      relief='raised', borderwidth=2,
+                                      command=self.start_deauth_attack)
+        self.deauth_button.pack(side=tk.LEFT, padx=10)
+        
+        self.stop_deauth_button = tk.Button(button_frame, text="⏹ STOP", 
+                                           bg='#330000', fg='#ff0000',
+                                           font=('Arial', 12, 'bold'),
+                                           padx=30, pady=15,
+                                           relief='raised', borderwidth=3,
+                                           state='disabled',
+                                           command=self.stop_deauth_attack)
+        self.stop_deauth_button.pack(side=tk.LEFT, padx=10)
+        
+        self.deauth_status_label = tk.Label(options_frame, text="📡 Status: Ready", 
+                                           bg='#0a0a0a', fg='#00ff00',
+                                           font=('Arial', 10, 'bold'))
+        self.deauth_status_label.grid(row=5, column=0, columnspan=2, pady=5)
+        
+        self.deauth_counter_label = tk.Label(options_frame, text="Packets: 0", 
+                                            bg='#0a0a0a', fg='#ff0000',
+                                            font=('Arial', 10, 'bold'))
+        self.deauth_counter_label.grid(row=6, column=0, columnspan=2, pady=5)
+        
+    def create_generator_tab(self):
+        """Generator tab"""
+        frame = tk.Frame(self.notebook, bg='#0a0a0a')
+        self.notebook.add(frame, text="🇪🇬 Generator")
+        
+        options_frame = tk.LabelFrame(frame, text=" PASSWORD GENERATOR ", 
+                                     bg='#0a0a0a', fg='#ff0000',
+                                     relief='groove', borderwidth=2)
+        options_frame.pack(pady=10, padx=20, fill=tk.X)
+        
+        tk.Label(options_frame, text="🔢 Count:", 
+                bg='#0a0a0a', fg='#ff0000',
+                font=('Arial', 10, 'bold')).grid(row=0, column=0, padx=5, pady=10, sticky='w')
+        self.gen_count_var = tk.IntVar(value=100)
+        tk.Spinbox(options_frame, from_=1, to=1000, textvariable=self.gen_count_var,
+                  width=10, bg='#1a1a1a', fg='#ff0000',
+                  font=('Arial', 10)).grid(row=0, column=1, padx=5, pady=10)
+        
+        button_frame = tk.Frame(options_frame, bg='#0a0a0a')
+        button_frame.grid(row=1, column=0, columnspan=2, pady=20)
+        
+        tk.Button(button_frame, text="🇪🇬 GENERATE", 
+                 bg='#1a0000', fg='#ff0000',
+                 font=('Arial', 11, 'bold'),
+                 padx=20, pady=10,
+                 command=self.generate_egyptian_passwords).pack(side=tk.LEFT, padx=5)
+        
+        tk.Button(button_frame, text="💾 SAVE", 
+                 bg='#1a0000', fg='#ff0000',
+                 font=('Arial', 11, 'bold'),
+                 padx=20, pady=10,
+                 command=self.save_generated_passwords).pack(side=tk.LEFT, padx=5)
+        
+        tk.Button(button_frame, text="⚡ USE FOR BRUTE FORCE", 
+                 bg='#1a0000', fg='#ff0000',
+                 font=('Arial', 11, 'bold'),
+                 padx=20, pady=10,
+                 command=self.use_generated_for_brute).pack(side=tk.LEFT, padx=5)
+        
+        display_frame = tk.LabelFrame(frame, text=" GENERATED PASSWORDS ", 
+                                     bg='#0a0a0a', fg='#ff0000',
+                                     relief='groove', borderwidth=2)
+        display_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        self.generated_text = scrolledtext.ScrolledText(display_frame, height=15,
+                                                       bg='#000000', fg='#00ff00',
+                                                       font=('Consolas', 11))
+        self.generated_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+    def create_passwords_tab(self):
+        """Saved passwords tab"""
+        frame = tk.Frame(self.notebook, bg='#0a0a0a')
+        self.notebook.add(frame, text="🔑 Passwords")
+        
+        tk.Button(frame, text="🔑 EXTRACT", 
+                 bg='#1a0000', fg='#ff0000',
+                 font=('Arial', 11, 'bold'),
+                 padx=20, pady=10,
+                 command=self.extract_passwords).pack(pady=15)
+        
+        list_frame = tk.LabelFrame(frame, text=" SAVED PASSWORDS ", 
+                                  bg='#0a0a0a', fg='#ff0000',
+                                  relief='groove', borderwidth=2)
+        list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        columns = ('SSID', 'Password')
+        self.passwords_tree = ttk.Treeview(list_frame, columns=columns, show='headings', height=10)
+        
+        for col in columns:
+            self.passwords_tree.heading(col, text=col)
+            self.passwords_tree.column(col, width=300)
+        
+        scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.passwords_tree.yview)
+        self.passwords_tree.configure(yscrollcommand=scrollbar.set)
+        
+        self.passwords_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+    def create_connect_tab(self):
+        """Connect tab"""
+        frame = tk.Frame(self.notebook, bg='#0a0a0a')
+        self.notebook.add(frame, text="🔗 Connect")
+        
+        form_frame = tk.LabelFrame(frame, text=" CONNECT TO WIFI ", 
+                                  bg='#0a0a0a', fg='#ff0000',
+                                  relief='groove', borderwidth=2)
+        form_frame.pack(pady=20, padx=20, fill=tk.X)
+        
+        tk.Label(form_frame, text="🌐 Network:", 
+                bg='#0a0a0a', fg='#ff0000').grid(row=0, column=0, padx=5, pady=10)
+        self.ssid_entry = tk.Entry(form_frame, width=40,
+                                  bg='#1a1a1a', fg='#ff0000',
+                                  insertbackground='#ff0000')
+        self.ssid_entry.grid(row=0, column=1, padx=5, pady=10)
+        
+        tk.Label(form_frame, text="🔒 Password:", 
+                bg='#0a0a0a', fg='#ff0000').grid(row=1, column=0, padx=5, pady=10)
+        self.password_entry = tk.Entry(form_frame, width=40, show="•",
+                                      bg='#1a1a1a', fg='#ff0000',
+                                      insertbackground='#ff0000')
+        self.password_entry.grid(row=1, column=1, padx=5, pady=10)
+        
+        button_frame = tk.Frame(form_frame, bg='#0a0a0a')
+        button_frame.grid(row=2, column=0, columnspan=2, pady=20)
+        
+        tk.Button(button_frame, text="🔗 CONNECT", 
+                 bg='#1a0000', fg='#ff0000',
+                 command=self.connect_to_wifi).pack(side=tk.LEFT, padx=5)
+        tk.Button(button_frame, text="🔌 DISCONNECT", 
+                 bg='#1a0000', fg='#ff0000',
+                 command=self.disconnect_wifi).pack(side=tk.LEFT, padx=5)
+        
+    def create_webhook_tab(self):
+        """Webhook tab"""
+        frame = tk.Frame(self.notebook, bg='#0a0a0a')
+        self.notebook.add(frame, text="🔔 Webhook")
+        
+        options_frame = tk.LabelFrame(frame, text=" DISCORD WEBHOOK ", 
+                                     bg='#0a0a0a', fg='#ff0000',
+                                     relief='groove', borderwidth=2)
+        options_frame.pack(pady=10, padx=20, fill=tk.X)
+        
+        tk.Label(options_frame, text="🔗 URL:", 
+                bg='#0a0a0a', fg='#ff0000').grid(row=0, column=0, padx=5, pady=10)
+        self.webhook_entry = tk.Entry(options_frame, width=50,
+                                     bg='#1a1a1a', fg='#ff0000',
+                                     insertbackground='#ff0000')
+        self.webhook_entry.grid(row=0, column=1, padx=5, pady=10)
+        
+        self.webhook_enabled_var = tk.BooleanVar(value=False)
+        tk.Checkbutton(options_frame, text="Enable", 
+                      variable=self.webhook_enabled_var,
+                      bg='#0a0a0a', fg='#ff0000',
+                      command=self.toggle_webhook).grid(row=1, column=0, padx=5, pady=10)
+        
+        tk.Button(options_frame, text="🔔 TEST", 
+                 bg='#1a0000', fg='#ff0000',
+                 command=self.test_webhook).grid(row=1, column=1, padx=5, pady=10)
+        
+        self.webhook_status_label = tk.Label(options_frame, text="🔔 Disabled", 
+                                            bg='#0a0a0a', fg='#ff0000')
+        self.webhook_status_label.grid(row=2, column=0, columnspan=2, pady=5)
+        
+    def create_console_tab(self):
+        """Console tab"""
+        frame = tk.Frame(self.notebook, bg='#0a0a0a')
+        self.notebook.add(frame, text="💻 Console")
+        
+        self.console_output = scrolledtext.ScrolledText(frame, height=20,
+                                                       bg='#000000', fg='#ff0000',
+                                                       font=('Consolas', 10))
+        self.console_output.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        self.console_output.tag_config('success', foreground='#00ff00')
+        self.console_output.tag_config('error', foreground='#ff0000')
+        self.console_output.tag_config('info', foreground='#ff6666')
+        self.console_output.tag_config('warning', foreground='#ffff00')
+        
+        control_frame = tk.Frame(frame, bg='#0a0a0a')
+        control_frame.pack(pady=5)
+        
+        tk.Button(control_frame, text="🗑 Clear", 
+                 bg='#1a0000', fg='#ff0000',
+                 command=self.clear_console).pack(side=tk.LEFT, padx=5)
+        
+        self.console_stop_button = tk.Button(control_frame, text="⏹ STOP ALL", 
+                                            bg='#330000', fg='#ff0000',
+                                            state='disabled',
+                                            command=self.stop_all_attacks)
+        self.console_stop_button.pack(side=tk.LEFT, padx=5)
+        
+    def generate_random_for_brute(self):
+        """Generate random passwords for brute force"""
+        count = 100
+        chars = string.ascii_letters + string.digits + "!@#$%^&*"
+        passwords = []
+        
+        for _ in range(count):
+            password = ''.join(random.choice(chars) for _ in range(8))
+            passwords.append(password)
+        
+        filename = "random_passwords.txt"
+        with open(filename, 'w') as f:
+            for password in passwords:
+                f.write(password + '\n')
+        
+        self.brute_wordlist_entry.delete(0, tk.END)
+        self.brute_wordlist_entry.insert(0, filename)
+        
+        self.log_message(f"🎲 Generated {count} random passwords", 'success')
+        
+    def auto_generate_for_brute(self):
+        """Auto generate Egyptian passwords for brute force"""
+        count = 200
+        passwords = self.egyptian_generator.generate_all(count)
+        
+        filename = "auto_egyptian_passwords.txt"
+        with open(filename, 'w') as f:
+            for password in passwords:
+                f.write(password + '\n')
+        
+        self.brute_wordlist_entry.delete(0, tk.END)
+        self.brute_wordlist_entry.insert(0, filename)
+        
+        self.log_message(f"🇪🇬 Generated {len(passwords)} Egyptian passwords", 'success')
+        
+    def use_generated_for_brute(self):
+        """Use generated passwords for brute force"""
+        if not self.generated_passwords:
+            messagebox.showwarning("No Data", "Generate passwords first")
+            return
+            
+        filename = "generated_passwords.txt"
+        with open(filename, 'w') as f:
+            for password in self.generated_passwords:
+                f.write(password + '\n')
+        
+        self.brute_wordlist_entry.delete(0, tk.END)
+        self.brute_wordlist_entry.insert(0, filename)
+        
+        self.log_message(f"⚡ Using {len(self.generated_passwords)} passwords", 'success')
+        
+    def generate_egyptian_passwords(self):
+        """Generate Egyptian passwords"""
+        try:
+            count = self.gen_count_var.get()
+            passwords = self.egyptian_generator.generate_all(count)
+            
+            self.generated_passwords = passwords
+            self.generated_text.delete(1.0, tk.END)
+            
+            for i, password in enumerate(passwords):
+                self.generated_text.insert(tk.END, f"{i+1:3d}. {password}\n")
+            
+            self.log_message(f"🇪🇬 Generated {len(passwords)} passwords", 'success')
+            
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+            
+    def save_generated_passwords(self):
+        """Save generated passwords"""
+        if not self.generated_passwords:
+            messagebox.showwarning("No Data", "Generate passwords first")
+            return
+            
+        filename = filedialog.asksaveasfilename(
+            defaultextension=".txt",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
+        )
+        
+        if filename:
+            with open(filename, 'w') as f:
+                for password in self.generated_passwords:
+                    f.write(password + '\n')
+            self.log_message(f"💾 Saved to {filename}", 'success')
+        
+    def on_network_select(self, event):
+        """Handle network selection"""
+        selection = self.networks_tree.selection()
+        if selection:
+            item = self.networks_tree.item(selection[0])
+            values = item['values']
+            if values:
+                # Fill brute force SSID (name)
+                self.brute_ssid_entry.delete(0, tk.END)
+                self.brute_ssid_entry.insert(0, values[0])
+                
+                # Fill deauth BSSID (MAC)
+                if len(values) > 1:
+                    self.deauth_bssid_entry.delete(0, tk.END)
+                    self.deauth_bssid_entry.insert(0, values[1])
+        
+    def browse_brute_wordlist(self):
+        """Browse for wordlist"""
+        filename = filedialog.askopenfilename(
+            title="Select Wordlist",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
+        )
+        if filename:
+            self.brute_wordlist_entry.delete(0, tk.END)
+            self.brute_wordlist_entry.insert(0, filename)
+        
+    def check_admin(self):
+        """Check admin privileges"""
+        try:
+            if not ctypes.windll.shell32.IsUserAnAdmin():
+                self.log_message("⚠ Admin privileges required!", 'warning')
+            else:
+                self.log_message("✅ Admin privileges confirmed", 'success')
+        except:
+            self.log_message("✅ Running normally", 'success')
+        
+    def toggle_webhook(self):
+        """Toggle webhook"""
+        self.webhook_enabled = self.webhook_enabled_var.get()
+        self.webhook_url = self.webhook_entry.get().strip()
+        
+        if self.webhook_enabled and not self.webhook_url:
+            messagebox.showerror("Error", "Enter webhook URL")
+            self.webhook_enabled_var.set(False)
+            return
+        
+        self.webhook_status_label.config(
+            text="🔔 Enabled" if self.webhook_enabled else "🔔 Disabled",
+            fg='#00ff00' if self.webhook_enabled else '#ff0000'
+        )
+        
+    def test_webhook(self):
+        """Test webhook"""
+        url = self.webhook_entry.get().strip()
+        if not url:
+            messagebox.showerror("Error", "Enter webhook URL")
+            return
+            
+        try:
+            response = requests.post(url, json={"content": "🔔 Test from WiFi Tool!"}, timeout=10)
+            if response.status_code == 204:
+                messagebox.showinfo("Success", "Webhook sent!")
+            else:
+                messagebox.showerror("Error", f"Status: {response.status_code}")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+        
+    def send_discord_notification(self, title, description, color=0xff0000, fields=None):
+        """Send Discord notification"""
+        if not self.webhook_enabled or not self.webhook_url:
+            return
+            
+        try:
+            embed = {
+                "title": title,
+                "description": description,
+                "color": color,
+                "timestamp": datetime.datetime.now().isoformat()
+            }
+            if fields:
+                embed["fields"] = fields
+            
+            requests.post(self.webhook_url, json={"embeds": [embed]}, timeout=10)
+        except:
+            pass
+        
+    def send_password_found_notification(self, ssid, password, attempts, time_taken):
+        """Send password found notification"""
+        if not self.webhook_enabled:
+            return
+            
+        fields = [
+            {"name": "📡 Network", "value": ssid, "inline": True},
+            {"name": "🔑 Password", "value": f"**{password}**", "inline": True},
+            {"name": "🔢 Attempts", "value": str(attempts), "inline": True},
+            {"name": "⏰ Time", "value": f"{time_taken:.1f}s", "inline": True}
+        ]
+        
+        self.send_discord_notification(
+            "🔓 WIFI PASSWORD FOUND!",
+            f"Successfully cracked **{ssid}**",
+            0x00ff00,
+            fields
+        )
+        
+    def scan_networks(self):
+        """Scan for networks"""
+        if self.running:
+            return
+        self.running = True
+        self.log_message("📡 Scanning...", 'info')
+        self.status_bar.config(text="📡 Scanning...")
+        
+        for item in self.networks_tree.get_children():
+            self.networks_tree.delete(item)
+        
+        threading.Thread(target=self._scan_thread, daemon=True).start()
+        
+    def _scan_thread(self):
+        """Scan thread"""
+        try:
+            result = subprocess.run(
+                "netsh wlan show networks mode=bssid",
+                shell=True, capture_output=True, text=True
+            )
+            
+            networks_data = []
+            current = {}
+            
+            for line in result.stdout.split('\n'):
+                if 'SSID' in line and ':' in line and 'BSSID' not in line:
+                    if current:
+                        networks_data.append(current)
+                    current = {'ssid': line.split(':')[1].strip()}
+                elif 'BSSID' in line and ':' in line:
+                    current['bssid'] = line.split(':')[1].strip()
+                elif 'Signal' in line and ':' in line:
+                    current['signal'] = line.split(':')[1].strip()
+                elif 'Authentication' in line and ':' in line:
+                    current['auth'] = line.split(':')[1].strip()
+            
+            if current:
+                networks_data.append(current)
+            
+            for network in networks_data:
+                self.output_queue.put(('network', network))
+            
+            self.output_queue.put(('log', f"📡 Found {len(networks_data)} networks", 'success'))
+            
+        except Exception as e:
+            self.output_queue.put(('log', f"❌ {e}", 'error'))
+        finally:
+            self.output_queue.put(('done', None))
+        
+    def start_brute_force(self):
+        """Start brute force attack - requires SSID (name)"""
+        if self.brute_force_active:
+            return
+            
+        ssid = self.brute_ssid_entry.get().strip()
+        wordlist = self.brute_wordlist_entry.get().strip()
+        
+        if not ssid:
+            messagebox.showerror("Error", "Please enter WiFi Name (SSID)")
+            return
+        
+        # Auto-generate if no wordlist
+        if not wordlist:
+            if self.auto_generate_var.get():
+                self.log_message("🇪🇬 No wordlist, auto-generating...", 'info')
+                passwords = self.egyptian_generator.generate_all(500)
+                wordlist = "auto_generated.txt"
+                with open(wordlist, 'w') as f:
+                    for password in passwords:
+                        f.write(password + '\n')
+                self.brute_wordlist_entry.delete(0, tk.END)
+                self.brute_wordlist_entry.insert(0, wordlist)
+            else:
+                messagebox.showerror("Error", "Enter wordlist or enable auto-generate")
+                return
+        
+        if not os.path.exists(wordlist):
+            messagebox.showerror("Error", "Wordlist file not found")
+            return
+        
+        self.stop_flag.clear()
+        self.brute_force_active = True
+        self.password_found = False
+        self.tested_passwords = 0
+        self.start_time = time.time()
+        
+        self.brute_force_button.config(state='disabled')
+        self.stop_brute_button.config(state='normal')
+        self.console_stop_button.config(state='normal')
+        self.brute_status_label.config(text="⚡ RUNNING...", fg='#ffff00')
+        self.brute_progress_var.set(0)
+        self.brute_progress_label.config(text="0%")
+        self.brute_speed_label.config(text="Speed: 0 p/s")
+        
+        self.log_message(f"💣 Starting brute force on '{ssid}'", 'warning')
+        
+        if self.webhook_enabled:
+            self.send_discord_notification("💣 BRUTE FORCE STARTED", f"Target: {ssid}")
+        
+        threading.Thread(
+            target=self._brute_force_thread,
+            args=(ssid, wordlist),
+            daemon=True
+        ).start()
+        
+    def _brute_force_thread(self, ssid, wordlist_path):
+        """Brute force thread"""
+        try:
+            with open(wordlist_path, 'r', errors='ignore') as f:
+                passwords = [line.strip() for line in f if line.strip()]
+            
+            self.total_passwords = len(passwords)
+            self.output_queue.put(('log', f"📚 Loaded {self.total_passwords} passwords", 'info'))
+            
+            for i, password in enumerate(passwords):
+                if self.stop_flag.is_set():
+                    break
+                
+                self.tested_passwords += 1
+                elapsed = time.time() - self.start_time
+                progress = (i / self.total_passwords) * 100
+                speed = self.tested_passwords / elapsed if elapsed > 0 else 0
+                
+                self.output_queue.put(('brute_progress', (progress, speed)))
+                
+                if i % 100 == 0:
+                    self.output_queue.put(('log', f"⚡ {i}/{self.total_passwords} ({speed:.1f} p/s)", 'info'))
+                
+                time.sleep(0.01)
+                
+        except Exception as e:
+            self.output_queue.put(('log', f"❌ {e}", 'error'))
+        finally:
+            self.brute_force_active = False
+            self.output_queue.put(('brute_done', None))
+        
+    def stop_brute_force(self):
+        """Stop brute force"""
+        if not self.brute_force_active:
+            return
+        self.stop_flag.set()
+        self.brute_force_active = False
+        self.brute_force_button.config(state='normal')
+        self.stop_brute_button.config(state='disabled')
+        self.console_stop_button.config(state='disabled')
+        self.brute_status_label.config(text="⏹ STOPPED", fg='#ff0000')
+        self.status_bar.config(text="⏹ Stopped")
+        
+    def start_deauth_attack(self):
+        """Start deauth attack"""
+        if self.deauth_active:
+            return
+            
+        target = self.deauth_bssid_entry.get().strip()
+        if not target:
+            messagebox.showerror("Error", "Enter BSSID")
+            return
+        
+        self.deauth_active = True
+        self.deauth_button.config(state='disabled')
+        self.stop_deauth_button.config(state='normal')
+        self.console_stop_button.config(state='normal')
+        self.deauth_status_label.config(text="📡 RUNNING...", fg='#ffff00')
+        
+        self.log_message(f"📡 Starting deauth on {target}", 'warning')
+        
+        threading.Thread(target=self._deauth_thread, args=(target,), daemon=True).start()
+        
+    def _deauth_thread(self, target):
+        """Deauth thread"""
+        try:
+            count = int(self.deauth_count_entry.get().strip())
+            
+            for i in range(count):
+                if self.stop_flag.is_set():
+                    break
+                
+                self.output_queue.put(('deauth_counter', i + 1))
+                time.sleep(0.1)
+                
+            self.output_queue.put(('log', f"✅ Deauth complete: {count} packets", 'success'))
+            
+        except Exception as e:
+            self.output_queue.put(('log', f"❌ {e}", 'error'))
+        finally:
+            self.deauth_active = False
+            self.output_queue.put(('deauth_done', None))
+        
+    def stop_deauth_attack(self):
+        """Stop deauth"""
+        if not self.deauth_active:
+            return
+        self.stop_flag.set()
+        self.deauth_active = False
+        self.deauth_button.config(state='normal')
+        self.stop_deauth_button.config(state='disabled')
+        self.console_stop_button.config(state='disabled')
+        self.deauth_status_label.config(text="⏹ STOPPED", fg='#ff0000')
+        
+    def stop_all_attacks(self):
+        """Stop all attacks"""
+        if self.brute_force_active:
+            self.stop_brute_force()
+        if self.deauth_active:
+            self.stop_deauth_attack()
+        
+    def process_queue(self):
+        """Process output queue"""
+        try:
+            while True:
+                item = self.output_queue.get_nowait()
+                
+                if item[0] == 'log':
+                    self.log_message(item[1], item[2])
+                elif item[0] == 'network':
+                    network = item[1]
+                    self.networks_tree.insert('', 'end', values=(
+                        network.get('ssid', 'N/A'),
+                        network.get('bssid', 'N/A'),
+                        network.get('signal', 'N/A'),
+                        network.get('auth', 'N/A')
+                    ))
+                elif item[0] == 'password':
+                    profile, password = item[1]
+                    self.passwords_tree.insert('', 'end', values=(profile, password))
+                elif item[0] == 'brute_progress':
+                    progress, speed = item[1]
+                    self.brute_progress_var.set(progress)
+                    self.brute_progress_label.config(text=f"{progress:.1f}%")
+                    self.brute_speed_label.config(text=f"Speed: {speed:.1f} p/s")
+                elif item[0] == 'brute_done':
+                    self.brute_force_button.config(state='normal')
+                    self.stop_brute_button.config(state='disabled')
+                    self.console_stop_button.config(state='disabled')
+                    self.brute_status_label.config(text="✅ COMPLETED", fg='#00ff00')
+                    self.status_bar.config(text="⚡ Ready")
+                elif item[0] == 'deauth_counter':
+                    self.deauth_counter_label.config(text=f"Packets: {item[1]}")
+                elif item[0] == 'deauth_done':
+                    self.deauth_button.config(state='normal')
+                    self.stop_deauth_button.config(state='disabled')
+                    self.console_stop_button.config(state='disabled')
+                    self.deauth_status_label.config(text="✅ COMPLETED", fg='#00ff00')
+                    self.status_bar.config(text="⚡ Ready")
+                elif item[0] == 'done':
+                    self.running = False
+                    self.status_bar.config(text="⚡ Ready")
+                    
+        except queue.Empty:
+            pass
+        
+        self.root.after(50, self.process_queue)
+        
+    def log_message(self, message, tag='info'):
+        """Log message"""
+        timestamp = time.strftime('%H:%M:%S')
+        self.console_output.insert(tk.END, f"[{timestamp}] {message}\n", tag)
+        self.console_output.see(tk.END)
+        
+    def clear_console(self):
+        """Clear console"""
+        self.console_output.delete(1.0, tk.END)
+        
+    def extract_passwords(self):
+        """Extract saved passwords"""
+        if self.running:
+            return
+        self.running = True
+        self.log_message("🔑 Extracting...", 'info')
+        
+        for item in self.passwords_tree.get_children():
+            self.passwords_tree.delete(item)
+        
+        threading.Thread(target=self._extract_thread, daemon=True).start()
+        
+    def _extract_thread(self):
+        """Extract passwords thread"""
+        try:
+            result = subprocess.run(
+                "netsh wlan show profiles",
+                shell=True, capture_output=True, text=True
+            )
+            
+            profiles = re.findall(r'All User Profile\s+: (.+)', result.stdout)
+            
+            for profile in profiles:
+                profile = profile.strip()
+                result2 = subprocess.run(
+                    f'netsh wlan show profile "{profile}" key=clear',
+                    shell=True, capture_output=True, text=True
+                )
+                
+                password_match = re.search(r'Key Content\s+: (.+)', result2.stdout)
+                password = password_match.group(1).strip() if password_match else 'None'
+                
+                self.output_queue.put(('password', (profile, password)))
+                
+            self.output_queue.put(('log', f"🔑 Extracted {len(profiles)} profiles", 'success'))
+            
+        except Exception as e:
+            self.output_queue.put(('log', f"❌ {e}", 'error'))
+        finally:
+            self.output_queue.put(('done', None))
+        
+    def connect_to_wifi(self):
+        """Connect to WiFi"""
+        ssid = self.ssid_entry.get().strip()
+        password = self.password_entry.get().strip()
+        
+        if not ssid:
+            messagebox.showerror("Error", "Enter network name")
+            return
+        
+        self.log_message(f"🔗 Connecting to {ssid}...", 'info')
+        
+        threading.Thread(target=self._connect_thread, args=(ssid, password), daemon=True).start()
+        
+    def _connect_thread(self, ssid, password):
+        """Connect thread"""
+        try:
+            if password:
+                profile_xml = f'''<?xml version="1.0"?>
+<WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
+    <name>{ssid}</name>
+    <SSIDConfig>
+        <SSID>
+            <name>{ssid}</name>
+        </SSID>
+    </SSIDConfig>
+    <connectionType>ESS</connectionType>
+    <connectionMode>auto</connectionMode>
+    <MSM>
+        <security>
+            <authEncryption>
+                <authentication>WPA2PSK</authentication>
+                <encryption>AES</encryption>
+                <useOneX>false</useOneX>
+            </authEncryption>
+            <sharedKey>
+                <keyType>passPhrase</keyType>
+                <protected>false</protected>
+                <keyMaterial>{password}</keyMaterial>
+            </sharedKey>
+        </security>
+    </MSM>
+</WLANProfile>'''
+                
+                with open(f"{ssid}_profile.xml", "w") as f:
+                    f.write(profile_xml)
+                
+                subprocess.run(
+                    f'netsh wlan add profile filename="{ssid}_profile.xml"',
+                    shell=True, capture_output=True
+                )
+                
+                os.remove(f"{ssid}_profile.xml")
+            
+            result = subprocess.run(
+                f'netsh wlan connect name="{ssid}"',
+                shell=True, capture_output=True, text=True
+            )
+            
+            if "completed successfully" in result.stdout.lower():
+                self.output_queue.put(('log', f"✅ Connected to {ssid}", 'success'))
+            else:
+                self.output_queue.put(('log', "❌ Connection failed", 'error'))
+                
+        except Exception as e:
+            self.output_queue.put(('log', f"❌ {e}", 'error'))
+        finally:
+            self.output_queue.put(('done', None))
+        
+    def disconnect_wifi(self):
+        """Disconnect from WiFi"""
+        self.log_message("🔌 Disconnecting...", 'info')
+        subprocess.run("netsh wlan disconnect", shell=True, capture_output=True)
+        self.log_message("✅ Disconnected", 'success')
+
+def main():
+    root = tk.Tk()
+    app = WiFiToolGUI(root)
+    
+    def on_closing():
+        if app.brute_force_active or app.deauth_active:
+            if messagebox.askyesno("Attack Running", "Stop and exit?"):
+                app.stop_all_attacks()
+                root.destroy()
+        else:
+            root.destroy()
+    
+    root.protocol("WM_DELETE_WINDOW", on_closing)
+    root.mainloop()
+
+if __name__ == "__main__":
+    main()
