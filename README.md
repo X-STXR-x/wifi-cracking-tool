@@ -141,7 +141,7 @@ Linux + Monitor Mode Adapter|	90-95%
 Windows + Npcap + Scapy	|20-40%
 Windows without proper tools|	5-10%
 No monitor mode support|	0%
----------------
+
 ## Warning
 
 ⚠️ **For educational purposes only**
