@@ -136,20 +136,25 @@ When password is found:
 | 💻 Console | View logs |
 
 Success Rates
-Brute Force Attack
-Password Type	Success Rate	Time Required
-Weak (12345678)	95%	Seconds
-Common (ahmed123)	80%	Minutes
-Name + Year (ahmed1990)	70%	Minutes
-Phone Number	65%	Minutes
-Random 8-char	15%	Hours
-Strong 12+ char	5%	Days/Years
-Deauth Attack
-Setup	Success Rate
-Linux + Monitor Mode Adapter	90-95%
-Windows + Npcap + Scapy	20-40%
-Windows basic adapter	5-10%
-No monitor mode support	0%
+|Attack Type	Windows	Linux	Requirements
+|Brute Force	|70-85%|	85-95%	Wordlist
+|Deauth	5-15%	90-95%| Monitor Mode Adapter
+|Password Extract	|100%	N/A	Windows Only
+|Network Scan	|100%	100%	WiFi Adapter
+|Password Success Rates
+|Password Type	Example	Success Rate	Time Required
+|Weak	12345678	95%	Seconds
+|Common	ahmed123	80%	Minutes
+|Name + Year	ahmed1990	70%	Minutes
+|Phone Number	01012345678	65%	Minutes
+|Random 8-char	Kx7#mP2$	15%	Hours
+|Strong 12+ char	X9#mK2$pL4@v	5%	Days/Years
+|Deauth Success Rates
+|Setup	Success Rate
+|Linux + Monitor Mode Adapter	90-95%
+|Windows + Npcap + Scapy	20-40%
+|Windows Basic Adapter	5-10%
+|No Monitor Mode Support	0%
 
 ## Warning
 
