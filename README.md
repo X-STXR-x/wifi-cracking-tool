@@ -71,7 +71,7 @@ A powerful WiFi penetration testing tool with a sleek red/black GUI interface, d
 |------|---------|----------|
 | Name + Year | mike990 | Personal networks |
 | Name + Symbol | mohammed@123 | Common patterns |
-| Phone Number | 01012345678 | Egyptian networks |
+| Phone Number | 01012345678 | common networks |
 | Random | Kx7#mP2$ | Strong passwords |
 
 ---
